@@ -51,4 +51,5 @@ func strconvDemo() {
 		fmt.Println(err)
 	}
 	fmt.Printf("%T,%d\n", i, i) //bool true T-->类型 t-->打印bool对应的值是true还是false
+	fmt.Println("hello")
 }
