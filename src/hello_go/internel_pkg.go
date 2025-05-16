@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 )
 
 /**
@@ -51,8 +52,32 @@ func strconvDemo() {
 		fmt.Println(err)
 	}
 	fmt.Printf("%T,%d\n", i, i) //bool true T-->类型 t-->打印bool对应的值是true还是false
-	fmt.Println("hello")
-	fmt.Println("hello")
-	fmt.Println("hello")
-	fmt.Println("hello")
+
+}
+
+func timeDemo() {
+	nowTime := time.Now()
+	fmt.Println(nowTime)                           //会显示时区
+	format := nowTime.Format("2006年1月2日 15:04:05") //需要格式化,但是时间必须是这个时间,这个时间是go语言诞生的时间
+	fmt.Println(format)
+	format = nowTime.Format("2006年1月2日")
+	fmt.Println(format)
+	format = nowTime.Format("2006-1-2")
+	fmt.Println(format)
+	format = nowTime.Format("2006/1/2")
+	fmt.Println(format)
+
+	str := "2020年3月31日" //将字符串转为时间
+	parse, _ := time.Parse("2006年1月2日", str)
+	fmt.Println(parse)
+
+	year, month, day := time.Now().Date()
+	fmt.Println(year, month, day) //获取年月日
+	hour, m, sec := time.Now().Clock()
+	fmt.Println(hour, m, sec) //获取时分秒
+	yearDay := time.Now().YearDay()
+	fmt.Println(yearDay) // 获取今年已经过去多少天了
+
+	weekday := time.Now().Weekday()
+	fmt.Println(weekday) //获取今天是星期几
 }

@@ -11,7 +11,8 @@ var syncmap sync.Map
 func main() {
 	println("Hello World Go")
 	//stringsDemo()
-	strconvDemo()
+	//strconvDemo()
+	timeDemo()
 }
 
 func test_1() {
