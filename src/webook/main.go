@@ -2,25 +2,39 @@ package main
 
 import (
 	"github.com/gin-contrib/cors"
-	"github.com/gin-contrib/sessions"
-	"github.com/gin-contrib/sessions/cookie"
 	"github.com/gin-gonic/gin"
+	"github.com/redis/go-redis/v9"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
+	"net/http"
 	"strings"
 	"test/webook/internal/repository"
 	"test/webook/internal/repository/dao"
 	"test/webook/internal/service"
 	"test/webook/internal/web"
 	"test/webook/internal/web/middleware"
+	"test/webook/pkg/ginx/middleware/ratelimit"
 	"time"
 )
 
+/*
+在win上打包go文件的命令:
+
+	SET CGO_ENABLED=0
+	SET GOOS=linux
+	SET GOARCH=amd64
+	go build main.go //todo go build -o name .（将当前命令下的go文件打包为可执行文件）
+*/
 func main() {
-	db := initDB()
-	server := initWebServer()
-	userHandle := initUser(db)
-	userHandle.RegisterRouters(server)
+	//db := initDB()
+	//server := initWebServer()
+	//userHandle := initUser(db)
+	//userHandle.RegisterRouters(server)
+	//server.Run(":8080")
+	server := gin.Default()
+	server.GET("/hello", func(ctx *gin.Context) {
+		ctx.String(http.StatusOK, "hello world~")
+	})
 	server.Run(":8080")
 }
 
@@ -34,9 +48,9 @@ func initWebServer() *gin.Engine {
 	server.Use(cors.New(cors.Config{
 		//AllowOrigins: []string{"https://foo.com"}, 允许的请求源
 		//AllowMethods:     []string{"PUT", "PATCH"}, 允许跨域的请求方法
-		AllowHeaders: []string{"Content-Type"}, //允许的请求头
-		//ExposeHeaders:    []string{"Content-Length"},
-		AllowCredentials: true, //是否允许携带类型于cookie的东西
+		AllowHeaders:     []string{"Content-Type"}, //允许的请求头
+		ExposeHeaders:    []string{"x-jwt-token"},  //允许前端能够读取后端写回的响应头(在这里只允许读取x-jwt-token)
+		AllowCredentials: true,                     //是否允许携带类型于cookie的东西
 		AllowOriginFunc: func(origin string) bool {
 			if strings.HasPrefix(origin, "http://localhost") { //如果请求是以这个为前缀的,则允许
 				return true
@@ -46,9 +60,20 @@ func initWebServer() *gin.Engine {
 		MaxAge: 12 * time.Hour,
 	}))
 
-	store := cookie.NewStore([]byte("secret"))
-	server.Use(sessions.Sessions("mysession", store))
-	server.Use(middleware.NewLoginMiddleWareBuilder().
+	//限流 1分钟 100次
+	redisClient := redis.NewClient(&redis.Options{
+		Addr: "localhost:6379",
+	})
+	server.Use(ratelimit.NewBuilder(redisClient,
+		time.Second, 100).Build())
+
+	//store := cookie.NewStore([]byte("secret"))
+	//server.Use(sessions.Sessions("mysession", store))
+	//server.Use(middleware.NewLoginMiddleWareBuilder().
+	//	IgnorePath("/users/login").
+	//	IgnorePath("/users/signup").
+	//	Build())
+	server.Use(middleware.NewLoginJWTMiddleWareBuilder().
 		IgnorePath("/users/login").
 		IgnorePath("/users/signup").
 		Build())

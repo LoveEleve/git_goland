@@ -5,11 +5,18 @@ import (
 	regexp "github.com/dlclark/regexp2"
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
+	jwt "github.com/golang-jwt/jwt/v5"
 	"net/http"
 	"test/webook/internal/domain"
 	"test/webook/internal/service"
+	"time"
 )
 
+/*
+	PS:
+		1.退出登录 --> JWT失效功能如何完成？
+
+*/
 // 邮箱和密码的正则表达式
 const (
 	emailRegexPattern = "^\\w+([-+.]\\w+)*@\\w+([-.]\\w+)*\\.\\w+([-.]\\w+)*$"
@@ -21,6 +28,14 @@ type UserHandle struct {
 	userService *service.UserService
 	emailExp    *regexp.Regexp
 	passwordExp *regexp.Regexp
+}
+
+// token中需要存储的对象信息 所 对应的结构体
+type UserClaims struct {
+	jwt.RegisteredClaims //Claim要求实现接口,所以需要引入这个内置结构体
+	//用户需要存储到token中的数据
+	UID       int64
+	UserAgent string
 }
 
 func NewUserHandle(userService *service.UserService) *UserHandle {
@@ -37,9 +52,11 @@ func NewUserHandle(userService *service.UserService) *UserHandle {
 func (u *UserHandle) RegisterRouters(server *gin.Engine) {
 	group := server.Group("/users")
 	group.POST("/signup", u.SignUp)
-	group.POST("/login", u.Login)
+	//group.POST("/login", u.Login)
+	group.POST("/login", u.LoginJWT)
 	group.POST("/edit", u.Edit)
-	group.GET("/profile", u.Profile)
+	//group.GET("/profile", u.Profile)
+	group.GET("/profile", u.ProfileJWT)
 }
 
 // 用户注册
@@ -137,6 +154,49 @@ func (u *UserHandle) Login(ctx *gin.Context) {
 	return
 }
 
+// 用户登录 + JWT校验
+func (u *UserHandle) LoginJWT(ctx *gin.Context) {
+	type LoginReq struct {
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}
+	var req LoginReq
+	if err := ctx.Bind(&req); err != nil {
+		return
+	}
+	fmt.Println(req)
+	user, err := u.userService.Login(ctx, req.Email, req.Password)
+	if err == service.ErrInvalidUserOrPassword {
+		ctx.String(http.StatusOK, "用户名或者密码错误")
+		return
+	}
+	if err != nil {
+		ctx.String(http.StatusOK, "系统错误")
+		return
+	}
+	fmt.Println(user)
+
+	//@2 使用JWT来记录用户登录状态 (生成JWT token)
+	// 需要携带用户相关的信息 --> 比如 userId
+	claims := UserClaims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute)), //设置jwt的过期时间为1分钟
+		},
+		UID:       user.Id,
+		UserAgent: ctx.Request.UserAgent(),
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS512, claims)
+	tokenStr, err := token.SignedString([]byte("aB3f9KjL8mNpQrStUvWxYz12345678"))
+	if err != nil {
+		ctx.String(http.StatusInternalServerError, "系统错误")
+	}
+	fmt.Println(tokenStr)
+	ctx.Header("x-jwt-token", tokenStr)
+	ctx.String(http.StatusOK, "登录成功")
+
+	return
+}
+
 // 用户修改个人信息
 func (u *UserHandle) Edit(ctx *gin.Context) {
 
@@ -144,5 +204,22 @@ func (u *UserHandle) Edit(ctx *gin.Context) {
 
 // 用户查看个人信息
 func (u *UserHandle) Profile(ctx *gin.Context) {
+
+}
+
+// 用户查看个人信息
+func (u *UserHandle) ProfileJWT(ctx *gin.Context) {
+	claims, exists := ctx.Get("claims")
+	if !exists {
+		ctx.String(http.StatusOK, "系统错误")
+		return
+	}
+	c, ok := claims.(*UserClaims)
+	if !ok {
+		ctx.String(http.StatusOK, "系统错误")
+		return
+	}
+	fmt.Println(c.UID)
+	ctx.String(http.StatusOK, "这是你的个人信息~~~~")
 
 }
